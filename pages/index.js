@@ -51,44 +51,54 @@ const THEMES = {
 };
 
 // ============================================
-// NEWTOWN LOGO COMPONENT
+// NEWTOWN LOGO COMPONENT - Matches actual brand
 // ============================================
 const NewtownLogo = ({ theme, size = 'normal' }) => {
-  const scale = size === 'small' ? 0.7 : size === 'large' ? 1.2 : 1;
+  const scale = size === 'small' ? 0.6 : size === 'large' ? 1.2 : 1;
   const isDark = theme.name === 'dark';
+  
+  // Colors from actual logo
+  const lightBlue = isDark ? '#7DD3FC' : '#5BA4D4';
+  const darkBlue = isDark ? '#CBD5E1' : '#1E3A5F';
   
   return (
     <svg 
-      width={55 * scale} 
-      height={50 * scale} 
-      viewBox="0 0 55 50" 
+      width={50 * scale} 
+      height={55 * scale} 
+      viewBox="0 0 50 55" 
       fill="none"
       style={{ flexShrink: 0 }}
     >
+      {/* Light blue swoosh arc at top */}
       <path
-        d="M 6 6 Q 0 18, 6 32 Q 10 42, 16 48"
-        stroke={isDark ? '#7DD3FC' : '#2B9CD8'}
-        strokeWidth="4"
+        d="M 8 8 Q 25 -2, 42 8"
+        stroke={lightBlue}
+        strokeWidth="3"
         fill="none"
         strokeLinecap="round"
       />
+      
+      {/* Foot/ankle outline - stylized curves */}
+      {/* Ankle curve going down */}
       <path
-        d="M 20 8 
-           C 28 6, 38 8, 44 14 
-           C 50 20, 52 30, 48 38 
-           C 46 42, 42 46, 36 48
-           C 30 50, 22 48, 18 44
-           C 14 40, 14 34, 16 28
-           C 18 22, 20 16, 20 8"
-        stroke={isDark ? '#CBD5E1' : '#1E3A5F'}
+        d="M 12 12 
+           C 8 18, 6 28, 8 38
+           C 9 44, 12 48, 18 50
+           L 28 50
+           C 24 48, 22 44, 22 40
+           C 22 34, 24 28, 22 22
+           C 20 16, 16 12, 12 12"
+        stroke={darkBlue}
         strokeWidth="2.5"
         fill="none"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+      
+      {/* Inner ankle detail line */}
       <path
-        d="M 32 14 C 30 20, 28 28, 30 36"
-        stroke={isDark ? '#CBD5E1' : '#1E3A5F'}
+        d="M 16 18 C 14 24, 14 32, 16 40"
+        stroke={darkBlue}
         strokeWidth="1.5"
         fill="none"
         strokeLinecap="round"
@@ -243,8 +253,8 @@ export default function MDMGenerator() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
     
-    recognition.continuous = true;
-    recognition.interimResults = true;
+    recognition.continuous = false;
+    recognition.interimResults = false;
     recognition.lang = 'en-US';
     
     recognition.onstart = () => setIsListening(true);
@@ -257,10 +267,7 @@ export default function MDMGenerator() {
     };
     
     recognition.onresult = (event) => {
-      let transcript = '';
-      for (let i = 0; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript;
-      }
+      const transcript = event.results[0][0].transcript;
       setInput(prev => {
         if (prev && !prev.endsWith(' ') && !prev.endsWith('\n')) {
           return prev + ' ' + transcript;
@@ -280,7 +287,9 @@ export default function MDMGenerator() {
     }
   };
   
-  const generateMDM = async () => {
+  const generateMDM = async (modeOverride) => {
+    const useMode = modeOverride || outputMode;
+    
     if (!input.trim()) {
       setError('Please enter clinical information first.');
       return;
@@ -296,7 +305,7 @@ export default function MDMGenerator() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           input: input.trim(),
-          mode: outputMode 
+          mode: useMode 
         })
       });
       
@@ -311,6 +320,14 @@ export default function MDMGenerator() {
       setError(e.message || 'Failed to generate MDM. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+  
+  // Handle mode toggle - auto-regenerate if there's input
+  const handleModeChange = (newMode) => {
+    setOutputMode(newMode);
+    if (input.trim()) {
+      generateMDM(newMode);
     }
   };
   
@@ -537,15 +554,47 @@ Note: Gave shot #2, stressed compliance, recommended custom orthotics`}
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 16 }}>
-          <button onClick={() => setOutputMode('quick')} style={{ background: outputMode === 'quick' ? theme.primary : theme.cardAlt, color: outputMode === 'quick' ? '#fff' : theme.textSecondary, border: `1px solid ${outputMode === 'quick' ? theme.primary : theme.border}`, borderRadius: 8, padding: '10px 20px', fontSize: 14, cursor: 'pointer', fontWeight: 500, flex: 1, maxWidth: 200 }}>
+          <button 
+            onClick={() => handleModeChange('quick')} 
+            disabled={loading}
+            style={{ 
+              background: outputMode === 'quick' ? theme.primary : theme.cardAlt, 
+              color: outputMode === 'quick' ? '#fff' : theme.textSecondary, 
+              border: `1px solid ${outputMode === 'quick' ? theme.primary : theme.border}`, 
+              borderRadius: 8, 
+              padding: '10px 20px', 
+              fontSize: 14, 
+              cursor: loading ? 'wait' : 'pointer', 
+              fontWeight: 500, 
+              flex: 1, 
+              maxWidth: 200,
+              opacity: loading ? 0.7 : 1
+            }}
+          >
             ⚡ Quick<div style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>75-150 words</div>
           </button>
-          <button onClick={() => setOutputMode('detailed')} style={{ background: outputMode === 'detailed' ? theme.primary : theme.cardAlt, color: outputMode === 'detailed' ? '#fff' : theme.textSecondary, border: `1px solid ${outputMode === 'detailed' ? theme.primary : theme.border}`, borderRadius: 8, padding: '10px 20px', fontSize: 14, cursor: 'pointer', fontWeight: 500, flex: 1, maxWidth: 200 }}>
+          <button 
+            onClick={() => handleModeChange('detailed')} 
+            disabled={loading}
+            style={{ 
+              background: outputMode === 'detailed' ? theme.primary : theme.cardAlt, 
+              color: outputMode === 'detailed' ? '#fff' : theme.textSecondary, 
+              border: `1px solid ${outputMode === 'detailed' ? theme.primary : theme.border}`, 
+              borderRadius: 8, 
+              padding: '10px 20px', 
+              fontSize: 14, 
+              cursor: loading ? 'wait' : 'pointer', 
+              fontWeight: 500, 
+              flex: 1, 
+              maxWidth: 200,
+              opacity: loading ? 0.7 : 1
+            }}
+          >
             📋 Detailed<div style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>200-350 words</div>
           </button>
         </div>
 
-        <button onClick={generateMDM} disabled={loading || !input.trim()} style={{ width: '100%', padding: '16px 24px', fontSize: 16, fontWeight: 600, background: loading ? theme.textMuted : theme.primary, color: '#fff', border: 'none', borderRadius: 10, cursor: loading || !input.trim() ? 'not-allowed' : 'pointer', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, boxShadow: theme.shadowLg }}>
+        <button onClick={() => generateMDM()} disabled={loading || !input.trim()} style={{ width: '100%', padding: '16px 24px', fontSize: 16, fontWeight: 600, background: loading ? theme.textMuted : theme.primary, color: '#fff', border: 'none', borderRadius: 10, cursor: loading || !input.trim() ? 'not-allowed' : 'pointer', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, boxShadow: theme.shadowLg }}>
           {loading ? 'Generating...' : 'Generate MDM Paragraph'}
         </button>
 
