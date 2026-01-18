@@ -51,54 +51,44 @@ const THEMES = {
 };
 
 // ============================================
-// NEWTOWN LOGO COMPONENT - Matches actual brand
+// NEWTOWN LOGO COMPONENT
 // ============================================
 const NewtownLogo = ({ theme, size = 'normal' }) => {
-  const scale = size === 'small' ? 0.6 : size === 'large' ? 1.2 : 1;
+  const scale = size === 'small' ? 0.7 : size === 'large' ? 1.2 : 1;
   const isDark = theme.name === 'dark';
-  
-  // Colors from actual logo
-  const lightBlue = isDark ? '#7DD3FC' : '#5BA4D4';
-  const darkBlue = isDark ? '#CBD5E1' : '#1E3A5F';
   
   return (
     <svg 
-      width={50 * scale} 
-      height={55 * scale} 
-      viewBox="0 0 50 55" 
+      width={55 * scale} 
+      height={50 * scale} 
+      viewBox="0 0 55 50" 
       fill="none"
       style={{ flexShrink: 0 }}
     >
-      {/* Light blue swoosh arc at top */}
       <path
-        d="M 8 8 Q 25 -2, 42 8"
-        stroke={lightBlue}
-        strokeWidth="3"
+        d="M 6 6 Q 0 18, 6 32 Q 10 42, 16 48"
+        stroke={isDark ? '#7DD3FC' : '#2B9CD8'}
+        strokeWidth="4"
         fill="none"
         strokeLinecap="round"
       />
-      
-      {/* Foot/ankle outline - stylized curves */}
-      {/* Ankle curve going down */}
       <path
-        d="M 12 12 
-           C 8 18, 6 28, 8 38
-           C 9 44, 12 48, 18 50
-           L 28 50
-           C 24 48, 22 44, 22 40
-           C 22 34, 24 28, 22 22
-           C 20 16, 16 12, 12 12"
-        stroke={darkBlue}
+        d="M 20 8 
+           C 28 6, 38 8, 44 14 
+           C 50 20, 52 30, 48 38 
+           C 46 42, 42 46, 36 48
+           C 30 50, 22 48, 18 44
+           C 14 40, 14 34, 16 28
+           C 18 22, 20 16, 20 8"
+        stroke={isDark ? '#CBD5E1' : '#1E3A5F'}
         strokeWidth="2.5"
         fill="none"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      
-      {/* Inner ankle detail line */}
       <path
-        d="M 16 18 C 14 24, 14 32, 16 40"
-        stroke={darkBlue}
+        d="M 32 14 C 30 20, 28 28, 30 36"
+        stroke={isDark ? '#CBD5E1' : '#1E3A5F'}
         strokeWidth="1.5"
         fill="none"
         strokeLinecap="round"
@@ -209,20 +199,32 @@ export default function MDMGenerator() {
   const [themeMode, setThemeMode] = useState('light');
   const theme = THEMES[themeMode];
   
+  // Core state
   const [input, setInput] = useState('');
   const [output, setOutput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   
+  // Mode state
   const [outputMode, setOutputMode] = useState('quick');
   const [isListening, setIsListening] = useState(false);
   
+  // Pattern state
   const [matchedPatterns, setMatchedPatterns] = useState([]);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [patternName, setPatternName] = useState('');
   const [savedPatterns, setSavedPatterns] = useState([]);
   const [showPatternLibrary, setShowPatternLibrary] = useState(false);
+  
+  // NEW: Billing language state
+  const [addMod25, setAddMod25] = useState(false);
+  const [addEmLevel, setAddEmLevel] = useState(false);
+  const [emLevel, setEmLevel] = useState('99214');
+  
+  // NEW: Refine state
+  const [refineInput, setRefineInput] = useState('');
+  const [isRefining, setIsRefining] = useState(false);
   
   const textareaRef = useRef(null);
   const recognitionRef = useRef(null);
@@ -298,6 +300,7 @@ export default function MDMGenerator() {
     setLoading(true);
     setError('');
     setOutput('');
+    setRefineInput('');
     
     try {
       const response = await fetch('/api/generate', {
@@ -305,7 +308,9 @@ export default function MDMGenerator() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           input: input.trim(),
-          mode: useMode 
+          mode: useMode,
+          addMod25: addMod25,
+          emLevel: addEmLevel ? emLevel : null
         })
       });
       
@@ -328,6 +333,46 @@ export default function MDMGenerator() {
     setOutputMode(newMode);
     if (input.trim()) {
       generateMDM(newMode);
+    }
+  };
+  
+  // NEW: Refine output function
+  const refineOutput = async () => {
+    if (!refineInput.trim()) {
+      setError('Please enter a refinement instruction.');
+      return;
+    }
+    
+    if (!output) {
+      setError('No output to refine. Generate first.');
+      return;
+    }
+    
+    setIsRefining(true);
+    setError('');
+    
+    try {
+      const response = await fetch('/api/refine', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          originalOutput: output,
+          instruction: refineInput.trim()
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to refine');
+      }
+      
+      setOutput(data.output);
+      setRefineInput('');
+    } catch (e) {
+      setError(e.message || 'Failed to refine. Please try again.');
+    } finally {
+      setIsRefining(false);
     }
   };
   
@@ -376,7 +421,34 @@ export default function MDMGenerator() {
     setOutput('');
     setError('');
     setMatchedPatterns([]);
+    setRefineInput('');
   };
+
+  // Checkbox component for consistent styling
+  const Checkbox = ({ checked, onChange, label, sublabel }) => (
+    <label style={{ 
+      display: 'flex', 
+      alignItems: 'flex-start', 
+      gap: 8, 
+      cursor: 'pointer',
+      padding: '8px 12px',
+      background: checked ? theme.primaryFaded : theme.cardAlt,
+      border: `1px solid ${checked ? theme.primary : theme.border}`,
+      borderRadius: 8,
+      transition: 'all 0.2s'
+    }}>
+      <input 
+        type="checkbox" 
+        checked={checked} 
+        onChange={(e) => onChange(e.target.checked)}
+        style={{ marginTop: 2, accentColor: theme.primary }}
+      />
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 500, color: theme.text }}>{label}</div>
+        {sublabel && <div style={{ fontSize: 11, color: theme.textMuted }}>{sublabel}</div>}
+      </div>
+    </label>
+  );
 
   return (
     <div style={{
@@ -478,6 +550,7 @@ export default function MDMGenerator() {
           </p>
         </div>
 
+        {/* Pattern Library Panel */}
         {showPatternLibrary && savedPatterns.length > 0 && (
           <div style={{
             background: theme.card,
@@ -508,6 +581,7 @@ export default function MDMGenerator() {
           </div>
         )}
 
+        {/* Pattern Match Suggestions */}
         {matchedPatterns.length > 0 && !output && (
           <div style={{ background: theme.warningFaded, border: `1px solid ${theme.warning}`, borderRadius: 10, padding: 14, marginBottom: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: theme.warning, marginBottom: 8 }}>💡 Similar patterns found:</div>
@@ -519,6 +593,7 @@ export default function MDMGenerator() {
           </div>
         )}
 
+        {/* Clinical Input */}
         <div style={{ background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 12, padding: 20, marginBottom: 16, boxShadow: theme.shadow }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <label style={{ fontWeight: 600, fontSize: 14 }}>Clinical Input</label>
@@ -549,14 +624,15 @@ S: 58 y/o male, left PF 4 months, had injection 6 wks ago — 50% better for 2 w
 O: TTP medial tubercle. Windlass positive.
 
 Note: Gave shot #2, stressed compliance, recommended custom orthotics`}
-            style={{ width: '100%', minHeight: 180, padding: 14, fontSize: 14, lineHeight: 1.6, border: `1px solid ${theme.border}`, borderRadius: 8, background: theme.bgAlt, color: theme.text, resize: 'vertical', fontFamily: 'inherit' }}
+            style={{ width: '100%', minHeight: 180, padding: 14, fontSize: 14, lineHeight: 1.6, border: `1px solid ${theme.border}`, borderRadius: 8, background: theme.bgAlt, color: theme.text, resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }}
           />
         </div>
 
+        {/* Quick/Detailed Mode Toggle */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 16 }}>
           <button 
             onClick={() => handleModeChange('quick')} 
-            disabled={loading}
+            disabled={loading || isRefining}
             style={{ 
               background: outputMode === 'quick' ? theme.primary : theme.cardAlt, 
               color: outputMode === 'quick' ? '#fff' : theme.textSecondary, 
@@ -564,18 +640,18 @@ Note: Gave shot #2, stressed compliance, recommended custom orthotics`}
               borderRadius: 8, 
               padding: '10px 20px', 
               fontSize: 14, 
-              cursor: loading ? 'wait' : 'pointer', 
+              cursor: loading || isRefining ? 'wait' : 'pointer', 
               fontWeight: 500, 
               flex: 1, 
               maxWidth: 200,
-              opacity: loading ? 0.7 : 1
+              opacity: loading || isRefining ? 0.7 : 1
             }}
           >
             ⚡ Quick<div style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>75-150 words</div>
           </button>
           <button 
             onClick={() => handleModeChange('detailed')} 
-            disabled={loading}
+            disabled={loading || isRefining}
             style={{ 
               background: outputMode === 'detailed' ? theme.primary : theme.cardAlt, 
               color: outputMode === 'detailed' ? '#fff' : theme.textSecondary, 
@@ -583,27 +659,103 @@ Note: Gave shot #2, stressed compliance, recommended custom orthotics`}
               borderRadius: 8, 
               padding: '10px 20px', 
               fontSize: 14, 
-              cursor: loading ? 'wait' : 'pointer', 
+              cursor: loading || isRefining ? 'wait' : 'pointer', 
               fontWeight: 500, 
               flex: 1, 
               maxWidth: 200,
-              opacity: loading ? 0.7 : 1
+              opacity: loading || isRefining ? 0.7 : 1
             }}
           >
             📋 Detailed<div style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>200-350 words</div>
           </button>
         </div>
 
-        <button onClick={() => generateMDM()} disabled={loading || !input.trim()} style={{ width: '100%', padding: '16px 24px', fontSize: 16, fontWeight: 600, background: loading ? theme.textMuted : theme.primary, color: '#fff', border: 'none', borderRadius: 10, cursor: loading || !input.trim() ? 'not-allowed' : 'pointer', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, boxShadow: theme.shadowLg }}>
+        {/* NEW: Billing Language Options */}
+        <div style={{ 
+          background: theme.card, 
+          border: `1px solid ${theme.border}`, 
+          borderRadius: 12, 
+          padding: 16, 
+          marginBottom: 16,
+          boxShadow: theme.shadow
+        }}>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12, color: theme.text }}>
+            📋 Billing Language (Optional)
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <Checkbox 
+              checked={addMod25} 
+              onChange={setAddMod25}
+              label="Add Modifier 25 Language"
+              sublabel="Separate & identifiable E/M service"
+            />
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+              <Checkbox 
+                checked={addEmLevel} 
+                onChange={setAddEmLevel}
+                label="Add E/M Level Justification"
+                sublabel="Complexity-based billing support"
+              />
+              {addEmLevel && (
+                <select
+                  value={emLevel}
+                  onChange={(e) => setEmLevel(e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    fontSize: 14,
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: 6,
+                    background: theme.bgAlt,
+                    color: theme.text,
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="99213">99213 - Low Complexity</option>
+                  <option value="99214">99214 - Moderate Complexity</option>
+                  <option value="99215">99215 - High Complexity</option>
+                </select>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Generate Button */}
+        <button 
+          onClick={() => generateMDM()} 
+          disabled={loading || isRefining || !input.trim()} 
+          style={{ 
+            width: '100%', 
+            padding: '16px 24px', 
+            fontSize: 16, 
+            fontWeight: 600, 
+            background: loading || isRefining ? theme.textMuted : theme.primary, 
+            color: '#fff', 
+            border: 'none', 
+            borderRadius: 10, 
+            cursor: loading || isRefining || !input.trim() ? 'not-allowed' : 'pointer', 
+            marginBottom: 20, 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            gap: 10, 
+            boxShadow: theme.shadowLg 
+          }}
+        >
           {loading ? 'Generating...' : 'Generate MDM Paragraph'}
         </button>
 
+        {/* Error Display */}
         {error && <div style={{ background: theme.warningFaded, color: theme.danger, padding: '12px 16px', borderRadius: 8, marginBottom: 16, fontSize: 14 }}>{error}</div>}
 
+        {/* Output Section */}
         {output && (
-          <div style={{ background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 12, padding: 20, boxShadow: theme.shadow }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <label style={{ fontWeight: 600, fontSize: 14 }}>MDM Output — {outputMode === 'quick' ? 'Quick' : 'Detailed'}</label>
+          <div style={{ background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 12, padding: 20, boxShadow: theme.shadow, marginBottom: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+              <label style={{ fontWeight: 600, fontSize: 14 }}>
+                MDM Output — {outputMode === 'quick' ? 'Quick' : 'Detailed'}
+                {addMod25 && <span style={{ marginLeft: 8, fontSize: 11, background: theme.primaryFaded, color: theme.primary, padding: '2px 6px', borderRadius: 4 }}>+Mod 25</span>}
+                {addEmLevel && <span style={{ marginLeft: 4, fontSize: 11, background: theme.successFaded, color: theme.success, padding: '2px 6px', borderRadius: 4 }}>+{emLevel}</span>}
+              </label>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => setShowSaveDialog(true)} style={{ background: theme.cardAlt, color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '6px 12px', fontSize: 13, cursor: 'pointer' }}>💾 Save Pattern</button>
                 <button onClick={copyToClipboard} style={{ background: copied ? theme.success : theme.primary, color: '#fff', border: 'none', borderRadius: 6, padding: '8px 16px', fontSize: 14, cursor: 'pointer', fontWeight: 500, minWidth: 100 }}>
@@ -612,15 +764,52 @@ Note: Gave shot #2, stressed compliance, recommended custom orthotics`}
               </div>
             </div>
             <div style={{ background: theme.bgAlt, border: `1px solid ${theme.border}`, borderRadius: 8, padding: 16, fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap', color: theme.text }}>{output}</div>
+            
+            {/* NEW: Refine Input */}
+            <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
+              <input
+                type="text"
+                value={refineInput}
+                onChange={(e) => setRefineInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !isRefining) refineOutput(); }}
+                placeholder='✏️ Refine: "add failed conservative care" or "make it shorter"'
+                style={{
+                  flex: 1,
+                  padding: '12px 14px',
+                  fontSize: 14,
+                  border: `1px solid ${theme.border}`,
+                  borderRadius: 8,
+                  background: theme.bgAlt,
+                  color: theme.text
+                }}
+              />
+              <button
+                onClick={refineOutput}
+                disabled={isRefining || !refineInput.trim()}
+                style={{
+                  padding: '12px 20px',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  background: isRefining ? theme.textMuted : theme.primary,
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: isRefining || !refineInput.trim() ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {isRefining ? '...' : 'Refine'}
+              </button>
+            </div>
           </div>
         )}
 
+        {/* Save Pattern Dialog */}
         {showSaveDialog && (
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
             <div style={{ background: theme.card, borderRadius: 16, padding: 24, width: '100%', maxWidth: 400, boxShadow: theme.shadowLg }}>
               <h3 style={{ margin: '0 0 16px', fontSize: 18 }}>💾 Save as Pattern</h3>
               <p style={{ fontSize: 13, color: theme.textSecondary, margin: '0 0 16px' }}>Save this output as a reusable pattern.</p>
-              <input type="text" value={patternName} onChange={(e) => setPatternName(e.target.value)} placeholder="Pattern name (e.g., 'PF - 2nd injection')" style={{ width: '100%', padding: '12px 14px', fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 8, background: theme.bgAlt, color: theme.text, marginBottom: 16 }} autoFocus />
+              <input type="text" value={patternName} onChange={(e) => setPatternName(e.target.value)} placeholder="Pattern name (e.g., 'PF - 2nd injection')" style={{ width: '100%', padding: '12px 14px', fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 8, background: theme.bgAlt, color: theme.text, marginBottom: 16, boxSizing: 'border-box' }} autoFocus />
               <div style={{ display: 'flex', gap: 10 }}>
                 <button onClick={() => { setShowSaveDialog(false); setPatternName(''); }} style={{ flex: 1, padding: '12px 16px', fontSize: 14, background: theme.cardAlt, color: theme.text, border: `1px solid ${theme.border}`, borderRadius: 8, cursor: 'pointer' }}>Cancel</button>
                 <button onClick={saveAsPattern} disabled={!patternName.trim()} style={{ flex: 1, padding: '12px 16px', fontSize: 14, fontWeight: 600, background: patternName.trim() ? theme.primary : theme.textMuted, color: '#fff', border: 'none', borderRadius: 8, cursor: patternName.trim() ? 'pointer' : 'not-allowed' }}>Save</button>
@@ -632,14 +821,14 @@ Note: Gave shot #2, stressed compliance, recommended custom orthotics`}
 
       <footer style={{ maxWidth: 900, margin: '24px auto', textAlign: 'center', color: theme.textMuted, fontSize: 12, padding: '0 16px' }}>
         <div>Newtown Foot & Ankle Specialists • MDM Documentation Tool</div>
-        <div style={{ marginTop: 4 }}>Type • Paste • Voice → Generate → Copy to ModMed</div>
+        <div style={{ marginTop: 4 }}>Type • Paste • Voice → Generate → Refine → Copy to ModMed</div>
       </footer>
 
       <style>{`
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        * { -webkit-tap-highlight-color: transparent; }
+        * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
         textarea::placeholder, input::placeholder { color: ${theme.textMuted}; }
-        textarea:focus, input:focus { outline: none; border-color: ${theme.primary}; }
+        textarea:focus, input:focus, select:focus { outline: none; border-color: ${theme.primary}; }
       `}</style>
     </div>
   );
