@@ -2,6 +2,27 @@ import Anthropic from '@anthropic-ai/sdk';
 
 const client = new Anthropic();
 
+// Billing language templates
+const BILLING_LANGUAGE = {
+  mod25: `
+
+SEPARATE E/M SERVICE (MODIFIER 25): A separate and identifiable evaluation and management service was performed today, distinct from the procedure. This E/M service required its own history, examination, and medical decision making beyond the usual pre-operative and post-operative care associated with the procedure performed.`,
+
+  em: {
+    '99213': `
+
+E/M LEVEL JUSTIFICATION (99213): Based on low complexity medical decision making involving a limited number of diagnoses and management options with low risk of complications, this encounter meets criteria for a 99213 level of service per 2021 E/M guidelines.`,
+    
+    '99214': `
+
+E/M LEVEL JUSTIFICATION (99214): Based on moderate complexity medical decision making involving multiple diagnoses requiring independent interpretation, prescription drug management, and moderate risk of morbidity from treatment options, this encounter meets criteria for a 99214 level of service per 2021 E/M guidelines.`,
+    
+    '99215': `
+
+E/M LEVEL JUSTIFICATION (99215): Based on high complexity medical decision making involving multiple chronic conditions with severe exacerbation, extensive data review including independent interpretation of diagnostic studies, and high risk of morbidity requiring drug therapy requiring intensive monitoring, this encounter meets criteria for a 99215 level of service per 2021 E/M guidelines.`
+  }
+};
+
 const getSystemPrompt = (mode) => {
   const wordCount = mode === 'detailed' ? '200-350' : '75-150';
   const sentences = mode === 'detailed' ? '6-10' : '3-6';
@@ -36,7 +57,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { input, mode = 'quick' } = req.body;
+  const { input, mode = 'quick', addMod25 = false, emLevel = null } = req.body;
 
   if (!input || typeof input !== 'string') {
     return res.status(400).json({ error: 'Input is required' });
@@ -55,7 +76,16 @@ export default async function handler(req, res) {
       ]
     });
 
-    const output = message.content[0]?.text || '';
+    let output = message.content[0]?.text || '';
+    
+    // Append billing language if requested
+    if (addMod25) {
+      output += BILLING_LANGUAGE.mod25;
+    }
+    
+    if (emLevel && BILLING_LANGUAGE.em[emLevel]) {
+      output += BILLING_LANGUAGE.em[emLevel];
+    }
     
     return res.status(200).json({ output });
   } catch (error) {
