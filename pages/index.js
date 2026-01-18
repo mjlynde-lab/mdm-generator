@@ -50,53 +50,19 @@ const THEMES = {
   }
 };
 
-// ============================================
+
 // NEWTOWN LOGO COMPONENT
-// ============================================
-const NewtownLogo = ({ theme, size = 'normal' }) => {
-  const scale = size === 'small' ? 0.7 : size === 'large' ? 1.2 : 1;
-  const isDark = theme.name === 'dark';
-  
+// ================================================
+const NewtownLogo = ({ size = 'normal' }) => {
+  const height = size === 'small' ? 35 : size === 'large' ? 60 : 45;
   return (
-    <svg 
-      width={55 * scale} 
-      height={50 * scale} 
-      viewBox="0 0 55 50" 
-      fill="none"
-      style={{ flexShrink: 0 }}
-    >
-      <path
-        d="M 6 6 Q 0 18, 6 32 Q 10 42, 16 48"
-        stroke={isDark ? '#7DD3FC' : '#2B9CD8'}
-        strokeWidth="4"
-        fill="none"
-        strokeLinecap="round"
-      />
-      <path
-        d="M 20 8 
-           C 28 6, 38 8, 44 14 
-           C 50 20, 52 30, 48 38 
-           C 46 42, 42 46, 36 48
-           C 30 50, 22 48, 18 44
-           C 14 40, 14 34, 16 28
-           C 18 22, 20 16, 20 8"
-        stroke={isDark ? '#CBD5E1' : '#1E3A5F'}
-        strokeWidth="2.5"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M 32 14 C 30 20, 28 28, 30 36"
-        stroke={isDark ? '#CBD5E1' : '#1E3A5F'}
-        strokeWidth="1.5"
-        fill="none"
-        strokeLinecap="round"
-      />
-    </svg>
+    <img 
+      src="/logo.png" 
+      alt="Newtown Foot & Ankle Specialists" 
+      style={{ height, width: 'auto' }} 
+    />
   );
 };
-
 // ============================================
 // PATTERN LEARNING SYSTEM
 // ============================================
