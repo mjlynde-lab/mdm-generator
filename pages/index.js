@@ -57,7 +57,7 @@ const NewtownLogo = ({ size = 'normal' }) => {
   const height = size === 'small' ? 35 : size === 'large' ? 60 : 45;
   return (
     <img 
-      src="/logo.png" 
+      src="https://raw.githubusercontent.com/mjlynde-lab/mdm-generator/main/logo.png"
       alt="Newtown Foot & Ankle Specialists" 
       style={{ height, width: 'auto' }} 
     />
