@@ -2,62 +2,186 @@ import Anthropic from '@anthropic-ai/sdk';
 
 const client = new Anthropic();
 
-// Billing language templates
-const BILLING_LANGUAGE = {
-  mod25: `
+// ============================================
+// MDM GENERATOR v3.0
+// Lean + Protocol-Aware modes with Auto E/M & Modifier 25
+// ============================================
 
-SEPARATE E/M SERVICE (MODIFIER 25): A separate and identifiable evaluation and management service was performed today, distinct from the procedure. This E/M service required its own history, examination, and medical decision making beyond the usual pre-operative and post-operative care associated with the procedure performed.`,
+const LEAN_PROMPT = `You are a board-certified podiatric surgeon generating concise MDM documentation for the Plan section of a SOAP note.
 
-  em: {
-    '99213': `
+CONTEXT:
+- EMR: ModMed (ema) with protocol-driven counseling blocks
+- ModMed ALREADY documents that counseling occurred via checkboxes and lean text
+- Your job: Generate CLINICAL REASONING only — the "why" behind the plan
+- DO NOT include counseling attestations ("discussed risks," "patient verbalized understanding," etc.)
+- The protocol handles counseling proof; you handle decision-making proof
 
-E/M LEVEL JUSTIFICATION (99213): Based on low complexity medical decision making involving a limited number of diagnoses and management options with low risk of complications, this encounter meets criteria for a 99213 level of service per 2021 E/M guidelines.`,
-    
-    '99214': `
+OUTPUT STRUCTURE:
+ASSESSMENT:
+[1-2 sentences: Diagnosis + chronicity/status + key complicating factor if present + what was ruled out]
 
-E/M LEVEL JUSTIFICATION (99214): Based on moderate complexity medical decision making involving multiple diagnoses requiring independent interpretation, prescription drug management, and moderate risk of morbidity from treatment options, this encounter meets criteria for a 99214 level of service per 2021 E/M guidelines.`,
-    
-    '99215': `
+PLAN:
+1. [Intervention] — [brief rationale, tie to patient factors if relevant]
+2. [Intervention] — [brief rationale]
+3. [Intervention] — [brief rationale]
+[Continue as needed, typically 3-5 items]
 
-E/M LEVEL JUSTIFICATION (99215): Based on high complexity medical decision making involving multiple chronic conditions with severe exacerbation, extensive data review including independent interpretation of diagnostic studies, and high risk of morbidity requiring drug therapy requiring intensive monitoring, this encounter meets criteria for a 99215 level of service per 2021 E/M guidelines.`
-  }
-};
+FOLLOW-UP: [Timeframe]. Sooner if [1-2 specific red flags].
 
-const getSystemPrompt = (mode) => {
-  const wordCount = mode === 'detailed' ? '200-350' : '75-150';
-  const sentences = mode === 'detailed' ? '6-10' : '3-6';
-  
-  return `You are Dr. Michael Lynde, a board-certified podiatrist with 15 years of experience specializing in Medical Decision Making (MDM) documentation.
-
-Generate a concise MDM paragraph that demonstrates clinical reasoning for the Plan section of a SOAP note.
-
-Output Requirements:
-- ONE paragraph only, ${sentences} sentences, ${wordCount} words
-- Start with "Medical Decision Making:" 
+STYLE RULES:
+- No headers beyond ASSESSMENT, PLAN, FOLLOW-UP
+- No bullet points for MDM complexity (save that for Protocol-Aware mode)
+- No "Discussed with patient..." statements
+- No medication interaction paragraphs (integrate briefly into plan rationale if critical)
+- Tight, clinical prose — every word earns its place
+- Use em-dashes (—) not hyphens for rationale separation
 - Plain text ONLY — NO bold, NO asterisks, NO markdown
-- EMR copy-paste ready
-${mode === 'detailed' ? `
-Detailed Mode - Also include:
-- Differential diagnosis considerations
-- Risk stratification factors
-- Data reviewed (imaging, labs, prior records)
-- Treatment escalation reasoning
-` : ''}
-Clinical Philosophy:
+
+TARGET: 75-150 words
+
+CLINICAL PHILOSOPHY:
 - Curative (EPAT, Exosome, Custom orthotics) vs Symptomatic (Injections, NSAIDs)
-- Injection #3 = diminishing returns, pivot to regenerative
+- Injection #3 = diminishing returns, pivot to regenerative options
 - Medrol Dosepak: Avoid in diabetics
 - NSAIDs + Anticoagulants: Contraindicated
+- Corticosteroid injection in Achilles: ABSOLUTELY CONTRAINDICATED
 
-Do NOT repeat the S/O back. Focus on the "WHY" behind clinical decisions.`;
+After generating the note, add a separator line (---) and provide:
+E/M Level: [99213/99214/99215] ([Low-moderate/Moderate/High] complexity)
+Modifier 25: [YES/NO/NOT APPLICABLE] — [One-line rationale based on whether a procedure was performed and whether E/M is separately identifiable]`;
+
+const PROTOCOL_AWARE_PROMPT = `You are a board-certified podiatric surgeon generating comprehensive MDM documentation that explicitly justifies E/M complexity level.
+
+CONTEXT:
+- This output is for complex cases, audit defense, or standalone documentation
+- Emphasize the THREE PILLARS of MDM: Problems, Data, Risk
+- Integrate comorbidity impact on every treatment decision
+- Show clinical reasoning explicitly — "considered X, ruled out Y, selected Z because..."
+
+DEFAULT ASSUMPTION:
+This is a chronic/progressive condition in a patient with relevant comorbidities, requiring clinical judgment around medication interactions, treatment escalation, and risk management.
+
+OUTPUT STRUCTURE:
+ASSESSMENT:
+[Diagnosis] with [chronicity/progression]. [Comorbidity impact on presentation or treatment]. [Differential considerations — what was considered and ruled out]. [Risk stratification if applicable].
+
+MEDICAL DECISION MAKING: [Moderate/High] complexity
+• Problems: [Chronic illness with progression/exacerbation] OR [Multiple conditions addressed]
+• Data: [Imaging reviewed/External records/Medication reconciliation performed]
+• Risk: [Prescription management with attention to ___] OR [Decision-making complicated by ___]
+
+PLAN:
+1. [Intervention]: [Rationale with explicit attention to comorbidities/interactions]
+2. [Intervention]: [Rationale]
+3. [Intervention]: [Rationale]
+[Continue as needed]
+
+Medication considerations: [Specific interactions, contraindications, or monitoring needs based on patient's comorbidities/medication list — 1-2 sentences max]
+
+FOLLOW-UP:
+[Timeframe]. Return sooner if: [condition-specific red flags]. [Monitoring requirements related to treatment/comorbidities if applicable].
+
+STYLE RULES:
+- Use the exact headers shown above
+- MDM bullet section uses bullet points (•) — this is the exception
+- Plan items use numbered list with colon separator
+- "Medication considerations" is a single brief paragraph, not a list
+- Include specific quantified data where available (A1c values, eGFR, BMI, etc.)
+- Mention specific drug names, not classes, when documenting interactions
+- Plain text ONLY — NO bold, NO asterisks, NO markdown
+
+TARGET: 200-350 words
+
+CLINICAL PHILOSOPHY:
+- Curative (EPAT, Exosome, Custom orthotics) vs Symptomatic (Injections, NSAIDs)
+- Injection #3 = diminishing returns, pivot to regenerative options
+- Medrol Dosepak: Avoid in diabetics
+- NSAIDs + Anticoagulants: Contraindicated
+- Corticosteroid injection in Achilles: ABSOLUTELY CONTRAINDICATED
+
+After generating the note, add a separator line (---) and provide:
+E/M Level: [99213/99214/99215] ([Low-moderate/Moderate/High] complexity)
+Modifier 25: [YES/NO/NOT APPLICABLE] — [One-line rationale based on whether a procedure was performed and whether E/M is separately identifiable]`;
+
+// Condition-specific prompt additions
+const CONDITION_MODIFIERS = {
+  pf: `
+CONDITION CONTEXT: Plantar fasciitis
+Assume CHRONIC (3+ months) and RECALCITRANT unless stated otherwise.
+Key decision points: Treatment phase, comorbidity impact (diabetes/steroid glucose, obesity/mechanical, CKD/NSAID limits), injection threshold, EPAT consideration, custom orthotics medical necessity.
+Differential to rule out: Plantar fascia rupture, tarsal tunnel syndrome, calcaneal stress fracture, fat pad atrophy.`,
+
+  neuroma: `
+CONDITION CONTEXT: Morton's neuroma (interdigital neuroma)
+Key decision points: Injection series tracking (which number), diminishing returns at #3, response quantification, anticoagulation impact, diagnostic uncertainty.
+Differential to rule out: MTP synovitis/capsulitis, stress fracture, peripheral neuropathy, 2nd interspace involvement.`,
+
+  achilles: `
+CONDITION CONTEXT: Achilles tendinopathy
+⚠️ CRITICAL: Corticosteroid injection is ABSOLUTELY CONTRAINDICATED for Achilles tendon. Document this explicitly.
+Key decision points: Location (insertional vs midsubstance), rupture risk factors (age, fluoroquinolones, statins, diabetes), medication review for tendon-toxic drugs, eccentric loading protocol.
+Differential to rule out: Partial tear, retrocalcaneal bursitis, Haglund's deformity.`,
+
+  peroneal: `
+CONDITION CONTEXT: Peroneal tendinopathy
+Key decision points: Tear consideration (when MRI needed), subluxation assessment, instability relationship, biomechanical factors (hindfoot varus), injection caution.
+Differential to rule out: Lateral ankle instability, subluxation, longitudinal split tear, os peroneum syndrome, stress fracture.`,
+
+  df: `
+CONDITION CONTEXT: Diabetic foot evaluation
+Key decision points: Risk stratification (neuropathy, vascular, deformity, prior ulcer/amputation), protective sensation testing, vascular assessment, footwear evaluation, glycemic context.
+Risk categories: Low (intact sensation, no deformity, no PAD), Moderate (any single factor), High (prior ulcer/amputation OR neuropathy + deformity OR neuropathy + PAD).`,
+
+  wc: `
+CONDITION CONTEXT: Wound care / chronic ulcer
+Key decision points: Wound trajectory (improving/stable/deteriorating with quantification), debridement rationale, infection assessment, offloading adequacy, healing barriers.
+⚠️ For serial debridements: Document why continued debridement is medically necessary, what changed, objective measurements, plan modification if not progressing.`
 };
+
+// Detect condition from input text
+function detectCondition(input) {
+  const text = input.toLowerCase();
+  
+  if (text.includes('plantar fasciitis') || text.includes(' pf ') || 
+      (text.includes('heel pain') && text.includes('plantar'))) {
+    return 'pf';
+  }
+  if (text.includes('neuroma') || text.includes("morton") || 
+      text.includes('interspace') || text.includes("mulder")) {
+    return 'neuroma';
+  }
+  if (text.includes('achilles') && (text.includes('tendin') || text.includes('tendon'))) {
+    return 'achilles';
+  }
+  if (text.includes('peroneal') && text.includes('tendin')) {
+    return 'peroneal';
+  }
+  if (text.includes('diabetic foot') || text.includes(' dfe') || 
+      text.includes('neuropathy exam') || text.includes('diabetic eval')) {
+    return 'df';
+  }
+  if (text.includes('wound') || text.includes('ulcer') || 
+      text.includes(' dfu') || text.includes('debridement')) {
+    return 'wc';
+  }
+  
+  return null;
+}
+
+function getSystemPrompt(mode, input) {
+  const basePrompt = mode === 'detailed' ? PROTOCOL_AWARE_PROMPT : LEAN_PROMPT;
+  const condition = detectCondition(input);
+  const conditionModifier = condition ? CONDITION_MODIFIERS[condition] : '';
+  
+  return basePrompt + conditionModifier;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { input, mode = 'quick', addMod25 = false, emLevel = null } = req.body;
+  const { input, mode = 'quick' } = req.body;
 
   if (!input || typeof input !== 'string') {
     return res.status(400).json({ error: 'Input is required' });
@@ -67,25 +191,16 @@ export default async function handler(req, res) {
     const message = await client.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 1024,
-      system: getSystemPrompt(mode),
+      system: getSystemPrompt(mode, input),
       messages: [
         {
           role: 'user',
-          content: `Generate an MDM paragraph for this clinical scenario:\n\n${input.trim()}`
+          content: `Generate MDM documentation for this clinical scenario:\n\n${input.trim()}`
         }
       ]
     });
 
-    let output = message.content[0]?.text || '';
-    
-    // Append billing language if requested
-    if (addMod25) {
-      output += BILLING_LANGUAGE.mod25;
-    }
-    
-    if (emLevel && BILLING_LANGUAGE.em[emLevel]) {
-      output += BILLING_LANGUAGE.em[emLevel];
-    }
+    const output = message.content[0]?.text || '';
     
     return res.status(200).json({ output });
   } catch (error) {
