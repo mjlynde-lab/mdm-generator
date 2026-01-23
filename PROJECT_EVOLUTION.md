@@ -190,6 +190,106 @@ The system prompt encodes:
 - **MDM Workstation** (newtown-mdm.vercel.app) - More comprehensive tool with preferences system
 - **Continuum** - Future clinical intelligence platform (MDM tools will integrate as microservices)
 
+---# MDM Generator - PROJECT_EVOLUTION Update
+
+## Add This Entry to Your Existing PROJECT_EVOLUTION.md
+
 ---
+
+### Session: January 23, 2026
+
+**Focus:** MDM Generator v3.0 Architecture — Lean Mode + Auto E/M Interpretation
+
+#### What Changed
+
+Completed major architectural rethink aligning MDM Generator with ModMed EMR workflow.
+
+**Key Insight:** ModMed protocols handle counseling documentation via checkboxes. MDM Generator output should focus purely on clinical reasoning—no redundant "discussed with patient" attestations.
+
+#### New Architecture (v3.0)
+
+| Mode | Word Count | Purpose |
+|------|------------|---------|
+| **⚡ Lean** | 75-150 | "ModMed Mode" — assumes protocols handle counseling; outputs ASSESSMENT → PLAN → FOLLOW-UP only |
+| **📋 Protocol-Aware** | 200-350 | Full MDM justification with complexity bullets, medication considerations, comorbidity integration |
+
+**Existing Quick/Detailed toggle maps directly to Lean/Protocol-Aware.** No UI change needed.
+
+#### Auto E/M + Modifier 25 Detection
+
+App now interprets its own output and appends:
+
+```
+---
+E/M Level: 99214 (Moderate complexity)
+Modifier 25: YES — Significant, separately identifiable E/M service; 
+clinical reasoning distinct from procedure performed.
+```
+
+**Manual toggles to remove:**
+- "Add Modifier 25 Language" checkbox → DELETE (now auto-detected)
+- "Add E/M Level Justification" checkbox → DELETE (now always included)
+
+#### Documents Created
+
+- `mdm-generator-prompts-v3.md` — Complete system prompts for both modes + condition-specific modifiers (.pf, .neuroma, .achilles, .peroneal, .df, .wc)
+
+#### UI Decision
+
+Reviewed proposal to apply Continuum design system (Pearl boxes, Evidence Notes, etc.). **Rejected** — those components are for surgical case cards with literature citations. MDM Generator is a utility tool; current dark theme works fine.
+
+#### Current State
+
+- ✅ Architecture defined
+- ✅ Prompts written
+- ⏳ API implementation pending
+- ⏳ UI updates pending (remove checkboxes, add footer)
+- ⏳ Testing pending
+
+#### Next Steps
+
+1. Implement v3.0 prompts in API
+2. Remove billing checkboxes from UI
+3. Add E/M + Mod25 footer display
+4. Test with real scenarios
+5. Deploy to Vercel
+
+---
+
+## Condensed Version (for History file)
+
+```markdown
+# 2026-01-23 Session Summary
+
+**Focus:** MDM Generator v3.0 — Lean Mode + Auto E/M Interpretation
+
+## Key Outcomes
+- Defined two-mode architecture: Lean (ModMed-aware, 75-150 words) vs Protocol-Aware (full MDM, 200-350 words)
+- Added auto E/M level interpretation (99213/99214/99215)
+- Added auto Modifier 25 detection (procedure + separate E/M work)
+- Created complete v3.0 system prompts with condition-specific modifiers
+- Decided against UI redesign — current design works
+
+## Decisions
+- Manual billing toggles become redundant (auto-detected now)
+- Quick/Detailed toggle maps directly to Lean/Protocol-Aware
+- No Continuum design system for MDM Generator (overkill)
+
+## Files Created
+- `mdm-generator-prompts-v3.md` — Complete system prompts
+
+## Current State
+Architecture and prompts ready; implementation pending
+
+## Next Up
+1. Implement v3.0 prompts in API
+2. Update UI (remove checkboxes, add footer)
+3. Test and deploy
+
+## Restart Prompt
+> MDM Generator v3.0 implementation. Prompts ready in mdm-generator-prompts-v3.md. 
+> Need to: update API with new prompts, remove billing checkboxes, add E/M+Mod25 
+> footer display, test, deploy. Repo: github.com/mjlynde-lab/mdm-generator
+```
 
 *Last updated: January 16, 2026 — Session 2 (v2.0.0)*
