@@ -3,6 +3,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import Head from 'next/head';
 
 // ============================================
+// MDM GENERATOR v3.0 FRONTEND
+// Lean + Protocol-Aware modes with Auto E/M & Modifier 25
+// ============================================
+
+// ============================================
 // THEME SYSTEM
 // ============================================
 const THEMES = {
@@ -63,6 +68,7 @@ const NewtownLogo = ({ size = 'normal' }) => {
     />
   );
 };
+
 // ============================================
 // PATTERN LEARNING SYSTEM
 // ============================================
@@ -159,6 +165,33 @@ const PatternStorage = {
 };
 
 // ============================================
+// HELPER: Parse E/M and Modifier 25 from output
+// ============================================
+const parseBillingInfo = (output) => {
+  if (!output) return { mainContent: output, emLevel: null, modifier25: null };
+  
+  // Split on the --- separator
+  const parts = output.split(/\n---\n/);
+  
+  if (parts.length < 2) {
+    return { mainContent: output, emLevel: null, modifier25: null };
+  }
+  
+  const mainContent = parts[0].trim();
+  const billingSection = parts.slice(1).join('\n---\n');
+  
+  // Parse E/M Level
+  const emMatch = billingSection.match(/E\/M Level:\s*(99\d{3})\s*\(([^)]+)\)/i);
+  const emLevel = emMatch ? { code: emMatch[1], complexity: emMatch[2] } : null;
+  
+  // Parse Modifier 25
+  const mod25Match = billingSection.match(/Modifier 25:\s*(YES|NO|NOT APPLICABLE)\s*[—-]\s*(.+?)(?:\n|$)/i);
+  const modifier25 = mod25Match ? { status: mod25Match[1].toUpperCase(), rationale: mod25Match[2].trim() } : null;
+  
+  return { mainContent, emLevel, modifier25 };
+};
+
+// ============================================
 // MAIN APP COMPONENT
 // ============================================
 export default function MDMGenerator() {
@@ -183,14 +216,12 @@ export default function MDMGenerator() {
   const [savedPatterns, setSavedPatterns] = useState([]);
   const [showPatternLibrary, setShowPatternLibrary] = useState(false);
   
-  // NEW: Billing language state
-  const [addMod25, setAddMod25] = useState(false);
-  const [addEmLevel, setAddEmLevel] = useState(false);
-  const [emLevel, setEmLevel] = useState('99214');
-  
-  // NEW: Refine state
+  // Refine state
   const [refineInput, setRefineInput] = useState('');
   const [isRefining, setIsRefining] = useState(false);
+  
+  // Parsed billing info
+  const [billingInfo, setBillingInfo] = useState({ mainContent: '', emLevel: null, modifier25: null });
   
   const textareaRef = useRef(null);
   const recognitionRef = useRef(null);
@@ -211,6 +242,11 @@ export default function MDMGenerator() {
       setMatchedPatterns([]);
     }
   }, [input]);
+  
+  // Parse billing info whenever output changes
+  useEffect(() => {
+    setBillingInfo(parseBillingInfo(output));
+  }, [output]);
   
   const startVoiceInput = () => {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
@@ -274,9 +310,7 @@ export default function MDMGenerator() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           input: input.trim(),
-          mode: useMode,
-          addMod25: addMod25,
-          emLevel: addEmLevel ? emLevel : null
+          mode: useMode
         })
       });
       
@@ -302,7 +336,7 @@ export default function MDMGenerator() {
     }
   };
   
-  // NEW: Refine output function
+  // Refine output function
   const refineOutput = async () => {
     if (!refineInput.trim()) {
       setError('Please enter a refinement instruction.');
@@ -344,7 +378,8 @@ export default function MDMGenerator() {
   
   const copyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(output);
+      // Copy only the main content (without billing footer) for EMR paste
+      await navigator.clipboard.writeText(billingInfo.mainContent || output);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -360,7 +395,7 @@ export default function MDMGenerator() {
       name: patternName.trim(),
       keywords,
       inputSample: input.substring(0, 200),
-      outputTemplate: output,
+      outputTemplate: billingInfo.mainContent || output,
       mode: outputMode
     };
     
@@ -390,31 +425,31 @@ export default function MDMGenerator() {
     setRefineInput('');
   };
 
-  // Checkbox component for consistent styling
-  const Checkbox = ({ checked, onChange, label, sublabel }) => (
-    <label style={{ 
-      display: 'flex', 
-      alignItems: 'flex-start', 
-      gap: 8, 
-      cursor: 'pointer',
-      padding: '8px 12px',
-      background: checked ? theme.primaryFaded : theme.cardAlt,
-      border: `1px solid ${checked ? theme.primary : theme.border}`,
-      borderRadius: 8,
-      transition: 'all 0.2s'
-    }}>
-      <input 
-        type="checkbox" 
-        checked={checked} 
-        onChange={(e) => onChange(e.target.checked)}
-        style={{ marginTop: 2, accentColor: theme.primary }}
-      />
-      <div>
-        <div style={{ fontSize: 13, fontWeight: 500, color: theme.text }}>{label}</div>
-        {sublabel && <div style={{ fontSize: 11, color: theme.textMuted }}>{sublabel}</div>}
+  // Badge component for E/M and Modifier 25 display
+  const BillingBadge = ({ label, value, status, color }) => {
+    const bgColor = status === 'YES' ? theme.successFaded : 
+                    status === 'NO' ? theme.warningFaded : 
+                    theme.cardAlt;
+    const textColor = status === 'YES' ? theme.success : 
+                      status === 'NO' ? theme.warning : 
+                      color || theme.primary;
+    
+    return (
+      <div style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '4px 10px',
+        background: bgColor,
+        borderRadius: 6,
+        fontSize: 12,
+        fontWeight: 600,
+        color: textColor
+      }}>
+        {label}: {value}
       </div>
-    </label>
-  );
+    );
+  };
 
   return (
     <div style={{
@@ -636,55 +671,6 @@ Note: Gave shot #2, stressed compliance, recommended custom orthotics`}
           </button>
         </div>
 
-        {/* NEW: Billing Language Options */}
-        <div style={{ 
-          background: theme.card, 
-          border: `1px solid ${theme.border}`, 
-          borderRadius: 12, 
-          padding: 16, 
-          marginBottom: 16,
-          boxShadow: theme.shadow
-        }}>
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12, color: theme.text }}>
-            📋 Billing Language (Optional)
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <Checkbox 
-              checked={addMod25} 
-              onChange={setAddMod25}
-              label="Add Modifier 25 Language"
-              sublabel="Separate & identifiable E/M service"
-            />
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-              <Checkbox 
-                checked={addEmLevel} 
-                onChange={setAddEmLevel}
-                label="Add E/M Level Justification"
-                sublabel="Complexity-based billing support"
-              />
-              {addEmLevel && (
-                <select
-                  value={emLevel}
-                  onChange={(e) => setEmLevel(e.target.value)}
-                  style={{
-                    padding: '8px 12px',
-                    fontSize: 14,
-                    border: `1px solid ${theme.border}`,
-                    borderRadius: 6,
-                    background: theme.bgAlt,
-                    color: theme.text,
-                    cursor: 'pointer'
-                  }}
-                >
-                  <option value="99213">99213 - Low Complexity</option>
-                  <option value="99214">99214 - Moderate Complexity</option>
-                  <option value="99215">99215 - High Complexity</option>
-                </select>
-              )}
-            </div>
-          </div>
-        </div>
-
         {/* Generate Button */}
         <button 
           onClick={() => generateMDM()} 
@@ -719,8 +705,6 @@ Note: Gave shot #2, stressed compliance, recommended custom orthotics`}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
               <label style={{ fontWeight: 600, fontSize: 14 }}>
                 MDM Output — {outputMode === 'quick' ? 'Quick' : 'Detailed'}
-                {addMod25 && <span style={{ marginLeft: 8, fontSize: 11, background: theme.primaryFaded, color: theme.primary, padding: '2px 6px', borderRadius: 4 }}>+Mod 25</span>}
-                {addEmLevel && <span style={{ marginLeft: 4, fontSize: 11, background: theme.successFaded, color: theme.success, padding: '2px 6px', borderRadius: 4 }}>+{emLevel}</span>}
               </label>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => setShowSaveDialog(true)} style={{ background: theme.cardAlt, color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '6px 12px', fontSize: 13, cursor: 'pointer' }}>💾 Save Pattern</button>
@@ -729,9 +713,49 @@ Note: Gave shot #2, stressed compliance, recommended custom orthotics`}
                 </button>
               </div>
             </div>
-            <div style={{ background: theme.bgAlt, border: `1px solid ${theme.border}`, borderRadius: 8, padding: 16, fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap', color: theme.text }}>{output}</div>
             
-            {/* NEW: Refine Input */}
+            {/* Main MDM Content */}
+            <div style={{ background: theme.bgAlt, border: `1px solid ${theme.border}`, borderRadius: 8, padding: 16, fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap', color: theme.text }}>
+              {billingInfo.mainContent || output}
+            </div>
+            
+            {/* E/M and Modifier 25 Footer */}
+            {(billingInfo.emLevel || billingInfo.modifier25) && (
+              <div style={{ 
+                marginTop: 12, 
+                padding: '12px 16px', 
+                background: theme.cardAlt, 
+                borderRadius: 8,
+                border: `1px solid ${theme.border}`
+              }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: theme.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Billing Assessment (Auto-Detected)
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-start' }}>
+                  {billingInfo.emLevel && (
+                    <BillingBadge 
+                      label="E/M Level" 
+                      value={`${billingInfo.emLevel.code} (${billingInfo.emLevel.complexity})`}
+                      color={theme.primary}
+                    />
+                  )}
+                  {billingInfo.modifier25 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <BillingBadge 
+                        label="Modifier 25" 
+                        value={billingInfo.modifier25.status}
+                        status={billingInfo.modifier25.status}
+                      />
+                      <div style={{ fontSize: 11, color: theme.textMuted, paddingLeft: 4 }}>
+                        {billingInfo.modifier25.rationale}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {/* Refine Input */}
             <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
               <input
                 type="text"
@@ -786,7 +810,7 @@ Note: Gave shot #2, stressed compliance, recommended custom orthotics`}
       </main>
 
       <footer style={{ maxWidth: 900, margin: '24px auto', textAlign: 'center', color: theme.textMuted, fontSize: 12, padding: '0 16px' }}>
-        <div>Newtown Foot & Ankle Specialists • MDM Documentation Tool</div>
+        <div>Newtown Foot & Ankle Specialists • MDM Documentation Tool v3.0</div>
         <div style={{ marginTop: 4 }}>Type • Paste • Voice → Generate → Refine → Copy to ModMed</div>
       </footer>
 
